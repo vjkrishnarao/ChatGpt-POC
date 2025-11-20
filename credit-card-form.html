@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Credit Card Application</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #1f2937;
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        label {
+            display: block;
+            color: #374151;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        input,
+        select {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1.5px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+            font-family: inherit;
+        }
+
+        input:focus,
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        input::placeholder {
+            color: #9ca3af;
+        }
+
+        .error-message {
+            color: #dc2626;
+            font-size: 12px;
+            margin-top: 4px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .input-error {
+            border-color: #dc2626 !important;
+        }
+
+        .security-notice {
+            background: #f0f9ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 20px;
+            font-size: 12px;
+            color: #1e40af;
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+        }
+
+        .security-notice::before {
+            content: '🔒';
+            flex-shrink: 0;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            background: #d1d5db;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .success-message {
+            display: none;
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .success-message.show {
+            display: block;
+        }
+
+        .success-message::before {
+            content: '✓ ';
+            font-weight: bold;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            color: #667eea;
+            font-weight: 600;
+            margin: 10px 0;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            margin-left: 6px;
+            border: 2px solid #667eea;
+            border-right-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .footer-text {
+            text-align: center;
+            color: #9ca3af;
+            font-size: 12px;
+            margin-top: 20px;
+            line-height: 1.6;
+        }
+
+        .required::after {
+            content: ' *';
+            color: #dc2626;
+        }
+
+        .access-denied {
+            background: white;
+            border-radius: 12px;
+            max-width: 480px;
+            width: 100%;
+            padding: 32px;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .access-denied h1 {
+            font-size: 22px;
+            margin-bottom: 10px;
+            color: #111827;
+        }
+
+        .access-denied p {
+            font-size: 14px;
+            color: #4b5563;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="appContainer">
+        <div class="header">
+            <h1>💳 Credit Card Application</h1>
+            <p>Quick and secure application process in a sandboxed ChatGPT iframe</p>
+        </div>
+
+        <div class="security-notice" aria-live="polite">
+            This form runs inside a sandboxed iframe and is intended to be used only from
+            <strong>chatgpt.com</strong>.
+        </div>
+
+        <div class="success-message" id="successMessage" role="status" aria-live="polite">
+            Application submitted successfully! Your details have been received.
+        </div>
+
+        <form id="creditCardForm" aria-label="Credit card application form">
+            <fieldset style="border: none; padding: 0;">
+                <legend style="display: none;">Personal Information</legend>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="firstName" class="required">First Name</label>
+                        <input type="text" id="firstName" name="firstName" placeholder="John" required autocomplete="given-name">
+                        <div class="error-message" id="firstNameError">Please enter a valid first name</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="lastName" class="required">Last Name</label>
+                        <input type="text" id="lastName" name="lastName" placeholder="Doe" required autocomplete="family-name">
+                        <div class="error-message" id="lastNameError">Please enter a valid last name</div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="email" class="required">Email Address</label>
+                    <input type="email" id="email" name="email" placeholder="john.doe@example.com" required autocomplete="email">
+                    <div class="error-message" id="emailError">Please enter a valid email address</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="phone" class="required">Phone Number</label>
+                    <input type="tel" id="phone" name="phone" placeholder="+1 (555) 000-0000" required autocomplete="tel">
+                    <div class="error-message" id="phoneError">Please enter a valid phone number</div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="cardType" class="required">Card Type</label>
+                        <select id="cardType" name="cardType" required>
+                            <option value="">Select Card Type</option>
+                            <option value="rewards">Rewards Card</option>
+                            <option value="cashback">Cash Back Card</option>
+                            <option value="travel">Travel Card</option>
+                            <option value="premium">Premium Card</option>
+                            <option value="student">Student Card</option>
+                        </select>
+                        <div class="error-message" id="cardTypeError">Please select a card type</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="annualIncome" class="required">Annual Income</label>
+                        <input type="number" id="annualIncome" name="annualIncome" placeholder="$50,000" min="0" required inputmode="decimal">
+                        <div class="error-message" id="annualIncomeError">Please enter a valid annual income</div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="employmentStatus" class="required">Employment Status</label>
+                    <select id="employmentStatus" name="employmentStatus" required>
+                        <option value="">Select Status</option>
+                        <option value="employed">Employed</option>
+                        <option value="self-employed">Self-Employed</option>
+                        <option value="retired">Retired</option>
+                        <option value="student">Student</option>
+                        <option value="other">Other</option>
+                    </select>
+                    <div class="error-message" id="employmentStatusError">Please select employment status</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="address" class="required">Street Address</label>
+                    <input type="text" id="address" name="address" placeholder="123 Main Street" required autocomplete="street-address">
+                    <div class="error-message" id="addressError">Please enter a valid address</div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="city" class="required">City</label>
+                        <input type="text" id="city" name="city" placeholder="New York" required autocomplete="address-level2">
+                        <div class="error-message" id="cityError">Please enter a valid city</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="state" class="required">State/Province</label>
+                        <input type="text" id="state" name="state" placeholder="NY" maxlength="2" required autocomplete="address-level1">
+                        <div class="error-message" id="stateError">Please enter a valid state</div>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="zipCode" class="required">ZIP/Postal Code</label>
+                        <input type="text" id="zipCode" name="zipCode" placeholder="10001" required autocomplete="postal-code">
+                        <div class="error-message" id="zipCodeError">Please enter a valid ZIP code</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="country" class="required">Country</label>
+                        <input type="text" id="country" name="country" placeholder="United States" value="United States" required autocomplete="country-name">
+                        <div class="error-message" id="countryError">Please enter a valid country</div>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 25px;">
+                    <label style="display: flex; align-items: center; font-weight: 400; margin-bottom: 0;">
+                        <input type="checkbox" id="termsConsent" name="termsConsent" required style="width: auto; margin-right: 8px;">
+                        <span>I agree to the Terms and Conditions</span>
+                    </label>
+                    <div class="error-message" id="termsConsentError">You must agree to proceed</div>
+                </div>
+            </fieldset>
+
+            <div class="loading" id="loading">Processing...</div>
+            <button type="submit" id="submitBtn">Submit Application</button>
+        </form>
+
+        <div class="footer-text">
+            Your information is processed in a sandboxed environment and is intended to be used only within ChatGPT.
+        </div>
+    </div>
+
+    <script>
+    (function enforceChatGPTEmbedding() {
+        var block = false;
+        var reason = "";
+
+        try {
+            var inIframe = window.self !== window.top;
+
+            var referrerHost = "";
+            if (document.referrer) {
+                try {
+                    var refUrl = new URL(document.referrer);
+                    referrerHost = refUrl.hostname || "";
+                } catch (e) {}
+            }
+            console.log(document.referrer)
+
+            var isChatGPTReferrer =
+                referrerHost === "chatgpt.com" ||
+                referrerHost.slice(-12) === ".chatgpt.com";
+                console.log(referrerHost)
+
+            var isChatGPTEnv =
+                !!(window.openai &&
+                   (window.openai.environment === "chatgpt" ||
+                    (typeof window.openai.host === "string" &&
+                     window.openai.host.indexOf("chatgpt.com") !== -1)));
+
+                      console.log(window.openai.environment)
+                      console.log(inIframe)
+
+            if (!inIframe) {
+                block = true;
+                reason = "not running inside an iframe";
+            } else if (!isChatGPTReferrer && !isChatGPTEnv) {
+                block = true;
+                reason = "parent is not chatgpt.com";
+            }
+        } catch (e) {
+            block = true;
+            reason = "environment check failed";
+        }
+
+        if (!block) {
+            console.warn("Access to credit card form blocked:", reason);
+            document.body.innerHTML =
+                '<div class="access-denied">' +
+                    '<h1>Access denied</h1>' +
+                    '<p>This secure application form can only be used when embedded inside a sandboxed iframe on <strong>chatgpt.com</strong>.</p>' +
+                '</div>';
+            throw new Error("Blocked execution outside chatgpt.com sandboxed iframe");
+        }
+    })();
+
+    function prefillFormFromContext() {
+        try {
+            var toolInput = (window.openai && window.openai.toolInput) || {};
+            var toolOutput = (window.openai && window.openai.toolOutput) || {};
+            var contextData = {};
+
+            // merge without spread
+            for (var k in toolInput) {
+                if (Object.prototype.hasOwnProperty.call(toolInput, k)) {
+                    contextData[k] = toolInput[k];
+                }
+            }
+            for (var k2 in toolOutput) {
+                if (Object.prototype.hasOwnProperty.call(toolOutput, k2)) {
+                    contextData[k2] = toolOutput[k2];
+                }
+            }
+
+            var prefillMap = {
+                firstName: ['firstName', 'first_name', 'name'],
+                lastName: ['lastName', 'last_name'],
+                email: ['email', 'emailAddress'],
+                phone: ['phone', 'phoneNumber'],
+                country: ['country'],
+                city: ['city'],
+                state: ['state', 'province'],
+                address: ['address', 'streetAddress'],
+                zipCode: ['zipCode', 'zip', 'postal_code'],
+                cardType: ['cardType', 'card_type', 'preferredCardType'],
+                annualIncome: ['annualIncome', 'income'],
+                employmentStatus: ['employmentStatus', 'employment_status']
+            };
+
+            for (var fieldId in prefillMap) {
+                if (!Object.prototype.hasOwnProperty.call(prefillMap, fieldId)) continue;
+                var fieldNames = prefillMap[fieldId];
+                var fieldElement = document.getElementById(fieldId);
+                if (!fieldElement) continue;
+
+                for (var i = 0; i < fieldNames.length; i++) {
+                    var fieldName = fieldNames[i];
+                    var key = fieldName;
+                    var altKey = (typeof fieldName === "string") ? fieldName.toLowerCase() : fieldName;
+                    var raw = (contextData[key] !== undefined && contextData[key] !== null)
+                        ? contextData[key]
+                        : contextData[altKey];
+
+                    if (raw !== undefined && raw !== null && raw !== "") {
+                        if (fieldElement.type === "checkbox") {
+                            fieldElement.checked = !!raw;
+                        } else {
+                            fieldElement.value = raw;
+                        }
+                        break;
+                    }
+                }
+            }
+
+            console.log("Form prefilled from ChatGPT context:", contextData);
+        } catch (error) {
+            console.warn("Could not prefill form from context:", error);
+        }
+    }
+
+    // *** NEW: dummy data prefill ***
+    function prefillDummyData() {
+        var firstName = document.getElementById("firstName");
+        var lastName = document.getElementById("lastName");
+        var email = document.getElementById("email");
+        var phone = document.getElementById("phone");
+        var cardType = document.getElementById("cardType");
+        var annualIncome = document.getElementById("annualIncome");
+        var employmentStatus = document.getElementById("employmentStatus");
+        var address = document.getElementById("address");
+        var city = document.getElementById("city");
+        var state = document.getElementById("state");
+        var zipCode = document.getElementById("zipCode");
+        var country = document.getElementById("country");
+        var termsConsent = document.getElementById("termsConsent");
+
+        if (firstName) firstName.value = "John";
+        if (lastName) lastName.value = "Doe";
+        if (email) email.value = "john.doe@example.com";
+        if (phone) phone.value = "+1 (555) 123-4567";
+
+        if (cardType) cardType.value = "rewards";          // existing option
+        if (annualIncome) annualIncome.value = "65000";
+        if (employmentStatus) employmentStatus.value = "employed";
+
+        if (address) address.value = "123 Main Street";
+        if (city) city.value = "New York";
+        if (state) state.value = "NY";
+        if (zipCode) zipCode.value = "10001";
+        if (country) country.value = "United States";
+
+        if (termsConsent) termsConsent.checked = true;
+    }
+    // *** END dummy data prefill ***
+
+    function validateEmail(email) {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    }
+
+    function validatePhone(phone) {
+        return /^[\d\s\+\-\(\)]{10,}$/.test(phone.replace(/\s/g, ""));
+    }
+
+    function validateField(fieldId, isValid, errorMessage) {
+        if (errorMessage === undefined) errorMessage = "";
+
+        var field = document.getElementById(fieldId);
+        var error = document.getElementById(fieldId + "Error");
+
+        if (!field) return;
+
+        if (isValid) {
+            field.classList.remove("input-error");
+            if (error) error.classList.remove("show");
+        } else {
+            field.classList.add("input-error");
+            if (error) {
+                if (errorMessage) error.textContent = errorMessage;
+                error.classList.add("show");
+            }
+        }
+    }
+
+    function validateForm() {
+        var isValid = true;
+
+        var firstName = document.getElementById("firstName").value.trim();
+        if (!firstName || firstName.length < 2) {
+            validateField("firstName", false, "First name must be at least 2 characters");
+            isValid = false;
+        } else {
+            validateField("firstName", true);
+        }
+
+        var lastName = document.getElementById("lastName").value.trim();
+        if (!lastName || lastName.length < 2) {
+            validateField("lastName", false, "Last name must be at least 2 characters");
+            isValid = false;
+        } else {
+            validateField("lastName", true);
+        }
+
+        var email = document.getElementById("email").value.trim();
+        if (!validateEmail(email)) {
+            validateField("email", false, "Please enter a valid email address");
+            isValid = false;
+        } else {
+            validateField("email", true);
+        }
+
+        var phone = document.getElementById("phone").value.trim();
+        if (!validatePhone(phone)) {
+            validateField("phone", false, "Please enter a valid phone number");
+            isValid = false;
+        } else {
+            validateField("phone", true);
+        }
+
+        var cardType = document.getElementById("cardType").value;
+        if (!cardType) {
+            validateField("cardType", false);
+            isValid = false;
+        } else {
+            validateField("cardType", true);
+        }
+
+        var annualIncome = parseFloat(document.getElementById("annualIncome").value);
+        if (isNaN(annualIncome) || annualIncome < 0) {
+            validateField("annualIncome", false, "Please enter a valid annual income");
+            isValid = false;
+        } else {
+            validateField("annualIncome", true);
+        }
+
+        var employmentStatus = document.getElementById("employmentStatus").value;
+        if (!employmentStatus) {
+            validateField("employmentStatus", false);
+            isValid = false;
+        } else {
+            validateField("employmentStatus", true);
+        }
+
+        var address = document.getElementById("address").value.trim();
+        if (!address || address.length < 5) {
+            validateField("address", false, "Please enter a valid address");
+            isValid = false;
+        } else {
+            validateField("address", true);
+        }
+
+        var city = document.getElementById("city").value.trim();
+        if (!city || city.length < 2) {
+            validateField("city", false, "Please enter a valid city");
+            isValid = false;
+        } else {
+            validateField("city", true);
+        }
+
+        var state = document.getElementById("state").value.trim();
+        if (!state) {
+            validateField("state", false, "Please enter a state/province");
+            isValid = false;
+        } else {
+            validateField("state", true);
+        }
+
+        var zipCode = document.getElementById("zipCode").value.trim();
+        if (!zipCode || zipCode.length < 3) {
+            validateField("zipCode", false, "Please enter a valid ZIP code");
+            isValid = false;
+        } else {
+            validateField("zipCode", true);
+        }
+
+        var country = document.getElementById("country").value.trim();
+        if (!country) {
+            validateField("country", false);
+            isValid = false;
+        } else {
+            validateField("country", true);
+        }
+
+        var termsConsent = document.getElementById("termsConsent").checked;
+        if (!termsConsent) {
+            validateField("termsConsent", false, "You must agree to proceed");
+            isValid = false;
+        } else {
+            validateField("termsConsent", true);
+        }
+
+        return isValid;
+    }
+
+    function submitForm(e) {
+        e.preventDefault();
+
+        if (!validateForm()) {
+            return;
+        }
+
+        var form = document.getElementById("creditCardForm");
+        var submitBtn = document.getElementById("submitBtn");
+        var loading = document.getElementById("loading");
+        var successMessage = document.getElementById("successMessage");
+
+        var formData = {
+            firstName: document.getElementById("firstName").value.trim(),
+            lastName: document.getElementById("lastName").value.trim(),
+            email: document.getElementById("email").value.trim(),
+            phone: document.getElementById("phone").value.trim(),
+            cardType: document.getElementById("cardType").value,
+            annualIncome: parseFloat(document.getElementById("annualIncome").value),
+            employmentStatus: document.getElementById("employmentStatus").value,
+            address: document.getElementById("address").value.trim(),
+            city: document.getElementById("city").value.trim(),
+            state: document.getElementById("state").value.trim(),
+            zipCode: document.getElementById("zipCode").value.trim(),
+            country: document.getElementById("country").value.trim(),
+            submittedAt: new Date().toISOString(),
+            userAgent: navigator.userAgent,
+            source: "chatgpt-mcp-iframe"
+        };
+
+        submitBtn.disabled = true;
+        loading.classList.add("show");
+
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", "https://micheal-synergistic-lesia.ngrok-free.dev/api/form-submit", true);
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.setRequestHeader("X-Requested-From", "chatgpt-sandboxed-iframe");
+
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState === 4) {
+                loading.classList.remove("show");
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try {
+                        var result = JSON.parse(xhr.responseText || "{}");
+                        console.log("Application submitted successfully:", result);
+                    } catch (e) {}
+                    form.style.display = "none";
+                    successMessage.classList.add("show");
+                } else {
+                    console.error("Error submitting form:", xhr.status, xhr.responseText);
+                    alert("Error submitting application. Please try again.");
+                    submitBtn.disabled = false;
+                }
+            }
+        };
+
+        xhr.send(JSON.stringify(formData));
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+        // Prefill from context (if any), then override with dummy data
+        prefillFormFromContext();
+        //prefillDummyData();
+
+        var form = document.getElementById("creditCardForm");
+        if (form) {
+            form.addEventListener("submit", submitForm);
+        }
+
+        var fields = [
+            "firstName",
+            "lastName",
+            "email",
+            "phone",
+            "address",
+            "city",
+            "state",
+            "zipCode",
+            "country"
+        ];
+
+        for (var i = 0; i < fields.length; i++) {
+            (function (fieldId) {
+                var field = document.getElementById(fieldId);
+                if (!field) return;
+                field.addEventListener("blur", function () {
+                    var value = field.value.trim();
+
+                    if (fieldId === "email") {
+                        validateField(fieldId, validateEmail(value));
+                    } else if (fieldId === "phone") {
+                        validateField(fieldId, validatePhone(value));
+                    } else if (value.length >= 2) {
+                        validateField(fieldId, true);
+                    }
+                });
+            })(fields[i]);
+        }
+    });
+</script>
+
+</body>
+</html>
