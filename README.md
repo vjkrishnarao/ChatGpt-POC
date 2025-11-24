@@ -25,8 +25,8 @@ The server will output:
 ### Step 1: Get the Full Path to server.mjs
 ```bash
 pwd
-# Example output: /Users/samhitha/forChatGpt
-# Full path to server: /Users/samhitha/forChatGpt/server.mjs
+# Example output: /Users/Vijay/forChatGpt
+# Full path to server: /Users/Vijay/forChatGpt/server.mjs
 ```
 
 ### Step 2: Configure in ChatGPT
@@ -39,7 +39,7 @@ pwd
    - **Name**: `Bank Account Server`
    - **Type**: `stdio`
    - **Command**: `node`
-   - **Arguments**: `["/Users/samhitha/forChatGpt/server.mjs"]`
+   - **Arguments**: `["/Users/Vijay/forChatGpt/server.mjs"]`
 
 4. Save and restart ChatGPT
 
