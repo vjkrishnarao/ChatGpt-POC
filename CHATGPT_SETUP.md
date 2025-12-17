@@ -40,7 +40,7 @@ Add this to your Claude Desktop config file:
   "mcpServers": {
     "bank-account": {
       "command": "node",
-      "args": ["/Users/samhitha/forChatGpt/server.mjs"]
+      "args": ["/Users/vijay/forChatGpt/server.mjs"]
     }
   }
 }
@@ -59,10 +59,10 @@ To verify your MCP server works before integrating:
 
 ```bash
 # Terminal 1: Start the MCP server
-node /Users/samhitha/forChatGpt/server.mjs
+node /Users/vijay/forChatGpt/server.mjs
 
 # Terminal 2: Test with a tool call
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | node /Users/samhitha/forChatGpt/server.mjs
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | node /Users/vijay/forChatGpt/server.mjs
 ```
 
 ## Browser Alternative
@@ -70,7 +70,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | node /Users/samhitha/for
 If you don't have Claude Desktop, you can still test locally:
 
 ```bash
-node /Users/samhitha/forChatGpt/browser.mjs
+node /Users/vijay/forChatGpt/browser.mjs
 # Open http://localhost:3000 in your browser
 ```
 
