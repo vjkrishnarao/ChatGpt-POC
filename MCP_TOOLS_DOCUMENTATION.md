@@ -9,10 +9,11 @@ Complete guide for all tools available in the ChatGPT POC MCP server.
 1. [Send Money Tool](#send-money-tool)
 2. [Prepare Send Money Tool](#prepare-send-money-tool)
 3. [Open Send Money Form Tool](#open-send-money-form-tool)
-4. [Open Application Form Tool](#open-application-form-tool)
-5. [Get Credit Card Transactions Tool](#get-credit-card-transactions-tool)
-6. [Get Cashback Cards Tool](#get-cashback-cards-tool)
-7. [Upload Image Tool](#upload-image-tool)
+4. [Open Blank Send Money Form Tool](#open-blank-send-money-form-tool)
+5. [Open Application Form Tool](#open-application-form-tool)
+6. [Get Credit Card Transactions Tool](#get-credit-card-transactions-tool)
+7. [Get Cashback Cards Tool](#get-cashback-cards-tool)
+8. [Upload Image Tool](#upload-image-tool)
 
 ---
 
@@ -242,6 +243,92 @@ Open the Zelle® money transfer form for a previously prepared send money reques
 
 ### Usage Example
 See [Prepare Send Money Tool](#prepare-send-money-tool) for complete two-step example.
+
+---
+
+## Open Blank Send Money Form Tool
+
+### Overview
+Opens a blank Zelle® money transfer form with no prefilled data. User enters amount and recipient manually. Use this when you want to let the user fill in all details themselves without constraints.
+
+### Tool ID
+`open_blank_send_money_form`
+
+### Input Parameters
+None - this tool takes no required inputs.
+
+### Input Schema
+```json
+{}
+```
+
+### Output
+```json
+{
+  "structuredContent": {},
+  "content": [
+    {
+      "type": "text",
+      "text": "Opening money transfer form. Enter the amount and recipient to proceed."
+    }
+  ]
+}
+```
+
+### Widget Display
+- **Template**: Static HTML/React widget
+- **Resource URI**: `ui://widget/sendmoney.html`
+- **Screens**: Starts with "Select Recipient" screen (no prefill)
+- **Data Injection**: No prefill data injected
+
+### Usage Example
+
+**User Request:**
+```
+Open the send money form
+```
+
+**ChatGPT Execution:**
+```
+Tool: open_blank_send_money_form
+Input: (none)
+```
+
+**Result:**
+- Widget loads with blank Zelle® transfer form
+- User starts on recipient selection screen
+- User manually enters recipient and amount
+
+### Use Cases
+
+1. **Generic "Send Money" requests**
+   - User: "I want to send money"
+   - ChatGPT opens blank form (doesn't guess amount/recipient)
+
+2. **Flexible workflows**
+   - User might want to check balance first
+   - User might need to select from recent recipients
+   - User can customize payment details (memo, etc.)
+
+3. **Safety pattern**
+   - Prevents accidental transfers
+   - Requires explicit user action to confirm both amount and recipient
+   - No automated prefilling without clear request
+
+### Implementation Notes
+
+1. **No Draft Creation**
+   - Unlike `send_money` and `prepare_send_money`, this tool creates no server-side draft
+   - Reduces complexity for simple form open
+
+2. **Graceful Fallback**
+   - Even if resource handler fails to inject data, form works fine
+   - User simply gets blank form (expected behavior)
+
+3. **Different from send_money**
+   - `send_money`: Requires amount + recipient (strict, prevents accidents)
+   - `open_blank_send_money_form`: No parameters (flexible, user decides)
+   - `prepare_send_money` + `open_send_money_form`: Two-step pattern (planned transfers)
 
 ---
 

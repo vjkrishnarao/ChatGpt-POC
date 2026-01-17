@@ -636,61 +636,115 @@ server.registerTool(
   }
 );
 
-// LEGACY: Keep old send_money tool for backward compat but point to new pattern
+// ENHANCED: Smart send_money tool with optional parameters
+// Handles partial input: amount-only, recipient-only, or both
 // Uses STATIC outputTemplate - NO template variables
-// draftId is stored server-side as "latest" for resource handler to fetch
+// Stores draft server-side with smart screen selection
 server.registerTool(
   "send_money",
   {
     title: "Send Money with Zelle®",
     description:
-      "Send money directly to a recipient using Zelle®. Specify the amount and recipient name.",
+      "Send money to a recipient using Zelle®. Can specify amount, recipient, or both. Opens form with smart prefill and screen selection.",
     inputSchema: z.object({
-      amount: z.string().min(1).regex(/^\d+(\.\d{1,2})?$/).describe("Dollar amount to send (e.g., '50.00')"),
-      recipient: z.string().min(1).describe("Recipient name (required, e.g., 'David' or 'Sarah Chen')"),
+      amount: z.string().regex(/^\d+(\.\d{1,2})?$/, "Dollar amount format (e.g., '50.00')").optional().describe("Dollar amount to send (e.g., '50.00', '10.50') - optional"),
+      recipient: z.string().optional().describe("Recipient name (e.g., 'David' or 'Sarah Chen') - optional"),
     }),
     _meta: {
       // CRITICAL: Use STATIC template WITHOUT template variables
       // ChatGPT's connector does NOT support {variable} substitution in outputTemplate
-      // The resource handler will use the "latest" draft stored server-side
       "openai/outputTemplate": "ui://widget/sendmoney.html",
     },
   },
   async ({ amount, recipient }) => {
     console.log('\n========== SEND_MONEY TOOL CALLED ==========');
-    console.log('💰 Amount:', amount);
-    console.log('👤 Recipient:', recipient);
+    console.log('💰 Amount:', amount || '(not provided)');
+    console.log('👤 Recipient:', recipient || '(not provided)');
     
-    if (!amount || !recipient) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: "Error: both amount and recipient are required.",
-          },
-        ],
-      };
+    // Determine what was provided
+    const hasAmount = Boolean(amount && amount.trim());
+    const hasRecipient = Boolean(recipient && recipient.trim());
+    
+    // Determine start screen based on what was provided
+    let startScreen = 'select'; // default
+    if (hasAmount && !hasRecipient) {
+      startScreen = 'select'; // User said "send $50" → show recipient selection first
+      console.log('📋 Amount provided, no recipient → start on recipient selection');
+    } else if (hasRecipient && !hasAmount) {
+      startScreen = 'amount'; // User said "send to Sarah" → show amount entry
+      console.log('📋 Recipient provided, no amount → start on amount entry');
+    } else if (hasAmount && hasRecipient) {
+      startScreen = 'amount'; // Both provided → show confirmation screen
+      console.log('📋 Both provided → start on confirmation');
+    } else {
+      startScreen = 'select'; // Neither provided → show recipient selection
+      console.log('📋 Neither provided → start on recipient selection (blank form)');
     }
     
-    const { draftId, requestId } = createSendMoneyDraft(amount, recipient);
+    // Create draft (even if partial) so we can prefill the form
+    // The frontend will handle partial data gracefully
+    const { draftId, requestId } = createSendMoneyDraft(
+      amount || '',
+      recipient || ''
+    );
     
     console.log('✅ Created draft:', draftId);
-    console.log('✅ RequestId:', requestId);
-    console.log('✅ Returning structured data for ChatGPT to inject via window.openai.payload');
+    console.log('✅ Start screen:', startScreen);
     console.log('========== END SEND_MONEY ==========\n');
     
-    // Return structured data - ChatGPT will inject this via window.openai.payload
+    // Return structured data with startScreen hint
     return {
       structuredContent: {
         draftId,
         requestId,
-        amount,
-        recipient,
+        amount: amount || '',
+        recipient: recipient || '',
+        startScreen, // Hint for the widget about which screen to show
       },
       content: [
         {
           type: "text",
-          text: `Sending $${amount} to ${recipient}...`,
+          text: hasAmount && hasRecipient
+            ? `Sending $${amount} to ${recipient}...`
+            : hasAmount
+            ? `Ready to send $${amount}. Select a recipient.`
+            : hasRecipient
+            ? `Ready to send to ${recipient}. Enter amount.`
+            : `Opening money transfer form. Enter recipient and amount.`,
+        },
+      ],
+    };
+  }
+);
+
+// NEW: Open blank send money form (no prefill)
+// User can enter amount and recipient manually
+server.registerTool(
+  "open_blank_send_money_form",
+  {
+    title: "Open Send Money Form",
+    description:
+      "Open the Zelle® money transfer form with blank fields. User enters amount and recipient manually.",
+    inputSchema: z.object({}), // No required inputs
+    _meta: {
+      "openai/outputTemplate": "ui://widget/sendmoney.html",
+    },
+  },
+  async () => {
+    console.log('\n========== OPEN_BLANK_SEND_MONEY_FORM TOOL CALLED ==========');
+    
+    // Don't create a draft - let the user fill in the form
+    console.log('✅ Opening blank send money form');
+    console.log('========== END OPEN_BLANK_SEND_MONEY_FORM ==========\n');
+    
+    return {
+      structuredContent: {
+        // No prefill data
+      },
+      content: [
+        {
+          type: "text",
+          text: "Opening money transfer form. Enter the amount and recipient to proceed.",
         },
       ],
     };
@@ -788,10 +842,13 @@ app.get("/api/mcp-tools", (req, res) => {
     info: "Tools registered via McpServer.registerTool()",
     tools: [
       "send_money",
-      "open_send_money_form", 
+      "open_send_money_form",
+      "open_blank_send_money_form",
       "prepare_send_money",
       "open_application_form",
-      "upload_image"
+      "upload_image",
+      "get_credit_card_transactions",
+      "get_cashback_cards"
     ],
     note: "For full details, query via /mcp with tools/list method"
   });
