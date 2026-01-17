@@ -38,6 +38,119 @@ fs.mkdirSync(downloadsDir, { recursive: true });
 // In-memory session store (kept from your code)
 const imageSessions = new Map();
 
+// Draft storage for send-money (two-step pattern)
+const sendMoneyDrafts = new Map(); // key: draftId, value: { amount, recipient, createdAt, requestId }
+const sendMoneyLatestDraft = {}; // Keep track of the most recent draft for fallback
+const sendMoneyByRequestId = new Map(); // key: requestId, value: { amount, recipient, timestamp }
+const DRAFT_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Helper: Create a new draft
+function createSendMoneyDraft(amount, recipient) {
+  const draftId = `draft_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const draft = {
+    amount: String(amount).trim(),
+    recipient: String(recipient).trim(),
+    createdAt: Date.now(),
+    requestId,
+  };
+  sendMoneyDrafts.set(draftId, draft);
+  
+  // CRITICAL: Store by requestId so resource handler can find it quickly
+  // This is the key to the solution - requestId is returned in tool response
+  sendMoneyByRequestId.set(requestId, {
+    amount: draft.amount,
+    recipient: draft.recipient,
+    timestamp: Date.now(),
+  });
+  
+  // Also store as "latest" - resource handler will use this as fallback
+  sendMoneyLatestDraft.draftId = draftId;
+  sendMoneyLatestDraft.amount = draft.amount;
+  sendMoneyLatestDraft.recipient = draft.recipient;
+  sendMoneyLatestDraft.timestamp = draft.createdAt;
+  sendMoneyLatestDraft.requestId = requestId;
+  
+  console.log('💾 Created draft:', { draftId, requestId, amount: draft.amount, recipient: draft.recipient });
+  
+  // Clean up old entries
+  const now = Date.now();
+  for (const [key, val] of sendMoneyByRequestId.entries()) {
+    if (now - val.timestamp > DRAFT_TTL) {
+      sendMoneyByRequestId.delete(key);
+    }
+  }
+  for (const [key, val] of sendMoneyDrafts.entries()) {
+    if (now - val.createdAt > DRAFT_TTL) {
+      sendMoneyDrafts.delete(key);
+    }
+  }
+  
+  return { draftId, requestId };
+}
+
+// Helper: Retrieve and validate draft
+function getSendMoneyDraft(draftId) {
+  const draft = sendMoneyDrafts.get(draftId);
+  if (!draft) {
+    console.log('❌ Draft not found:', draftId);
+    return null;
+  }
+  
+  // Check if expired
+  if (Date.now() - draft.createdAt > DRAFT_TTL) {
+    console.log('❌ Draft expired:', draftId);
+    sendMoneyDrafts.delete(draftId);
+    return null;
+  }
+  
+  console.log('✅ Retrieved draft:', { draftId, amount: draft.amount, recipient: draft.recipient });
+  return draft;
+}
+
+// Helper: Get draft by requestId
+function getSendMoneyByRequestId(requestId) {
+  const data = sendMoneyByRequestId.get(requestId);
+  if (!data) {
+    return null;
+  }
+  if (Date.now() - data.timestamp > DRAFT_TTL) {
+    sendMoneyByRequestId.delete(requestId);
+    return null;
+  }
+  console.log('✅ Retrieved by requestId:', requestId);
+  return data;
+}
+
+// Helper: Get the latest draft (for resource handler fallback)
+function getLatestSendMoneyDraft() {
+  if (sendMoneyLatestDraft.requestId && Date.now() - sendMoneyLatestDraft.timestamp < DRAFT_TTL) {
+    console.log('✅ Using latest draft:', { amount: sendMoneyLatestDraft.amount, recipient: sendMoneyLatestDraft.recipient });
+    return {
+      amount: sendMoneyLatestDraft.amount,
+      recipient: sendMoneyLatestDraft.recipient,
+    };
+  }
+  console.log('❌ No valid latest draft available');
+  return null;
+}
+
+// Session/Draft storage for send-money (old pattern, kept for backward compat)
+const sendMoneyStore = new Map();
+let sessionCounter = 0;
+
+// NOTE:
+// ChatGPT's UI rendering expects a *static* outputTemplate declared on the tool.
+// Returning a dynamic outputTemplate at runtime (for example with ?session=...)
+// is not reliably honored by the client, which is why you were seeing nothing
+// render.
+//
+// Fix approach:
+// - Declare a static outputTemplate on the tool: ui://widget/sendmoney.html
+// - Pass the prefill data via structuredContent and also stash a "latest" copy
+//   in memory as a fallback.
+// - The resource handler reads (in order): explicit session -> latest -> query.
+
 // -----------------------------
 // Helpers
 // -----------------------------
@@ -86,6 +199,42 @@ function sanitizeFilename(name) {
     .replace(/[/\\?%*:|"<>]/g, "_")
     .replace(/\s+/g, "_")
     .slice(0, 180);
+}
+
+// Try to extract { amount, recipient } from a nested resourceRequest object
+function extractAmountRecipientFromResourceRequest(resourceRequest) {
+  if (!resourceRequest || typeof resourceRequest !== "object") return null;
+
+  let found = null;
+
+  function walk(node) {
+    if (!node || typeof node !== "object" || found) return;
+
+    // Direct hit on this object
+    if (typeof node.amount === "string" && node.amount.trim()) {
+      found = {
+        amount: node.amount.trim(),
+        recipient:
+          typeof node.recipient === "string" ? node.recipient.trim() : "",
+      };
+      return;
+    }
+
+    for (const key of Object.keys(node)) {
+      const value = node[key];
+      if (value && typeof value === "object") {
+        walk(value);
+      }
+    }
+  }
+
+  try {
+    walk(resourceRequest);
+  } catch (e) {
+    console.warn("⚠️  Failed to walk resourceRequest for amount/recipient:", e);
+  }
+
+  return found;
 }
 
 /**
@@ -147,29 +296,6 @@ function normalizeIncomingImage(req, body = {}) {
 function toDataUrl(buffer, mimeType) {
   const b64 = buffer.toString("base64");
   return `data:${mimeType || "application/octet-stream"};base64,${b64}`;
-}
-
-async function postToRemote(remoteUrl, payload) {
-  const resp = await fetch(remoteUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-
-  const text = await resp.text();
-  let parsed;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    parsed = { raw: text };
-  }
-
-  if (!resp.ok) {
-    const msg = parsed?.error || parsed?.message || text || "Remote upload failed";
-    throw new Error(`Remote POST failed (${resp.status}): ${msg}`);
-  }
-
-  return parsed;
 }
 
 // -----------------------------
@@ -293,44 +419,6 @@ server.registerTool(
 );
 
 server.registerTool(
-  "get_account_details",
-  {
-    title: "Get Account Details",
-    description:
-      "Retrieves mock banking account details including account number, routing number, and account type.",
-    inputSchema: z.object({
-      accountId: z.string().optional(),
-    }),
-  },
-  async () => {
-    const mockAccount = {
-      accountNumber: "9876543210",
-      routingNumber: "021000021",
-      accountType: "Checking",
-      accountHolderName: "John Doe",
-      balance: 5250.75,
-      currency: "USD",
-      status: "Active",
-      openedDate: "2024-01-15",
-      bankName: "Premier Bank",
-      SWIFT: "PNBAUS33",
-      IBAN: "US12021000021987654321",
-    };
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: `✅ Account Details Retrieved:\n\n**Account Information:**\n- Account Number: ${mockAccount.accountNumber}\n- Routing Number: ${mockAccount.routingNumber}\n- Account Type: ${mockAccount.accountType}\n- Account Holder: ${mockAccount.accountHolderName}\n- Bank Name: ${mockAccount.bankName}\n- Status: ${mockAccount.status}\n\n**Account Identifiers:**\n- SWIFT Code: ${mockAccount.SWIFT}\n- IBAN: ${mockAccount.IBAN}\n\n**Balance:**\n- Current Balance: $${mockAccount.balance.toFixed(
-            2
-          )} ${mockAccount.currency}`,
-        },
-      ],
-    };
-  }
-);
-
-server.registerTool(
   "get_credit_card_transactions",
   {
     title: "Get Credit Card Transactions",
@@ -371,54 +459,306 @@ server.registerTool(
 );
 
 server.registerTool(
-  "get_banking_info_summary",
+  "get_cashback_cards",
   {
-    title: "Get Banking Information Summary",
+    title: "Get Cashback Credit Cards",
     description:
-      "Provides a comprehensive summary of routing number, account number, and related banking details.",
-    inputSchema: z.object({
-      includeTransactions: z.boolean().optional().default(false),
-    }),
+      "Shows available credit cards with cashback rewards. Use this tool when user asks about cashback cards, cash rewards cards, or wants to see card options.",
+    inputSchema: z.object({}),
+    _meta: {
+      "openai/outputTemplate": "ui://widget/cashback-cards.html",
+      "openai/toolInvocation/invoking": "Loading cashback credit cards...",
+      "openai/toolInvocation/invoked":
+        "Here are the available cashback credit cards. You can review the options and learn more about each card.",
+    },
   },
-  async (params) => {
-    const accountInfo = {
-      accountNumber: "9876543210",
-      routingNumber: "021000021",
-      accountType: "Premium Checking",
-      bankName: "Premier Bank",
-      swiftCode: "PNBAUS33",
-      accountHolderName: "John Doe",
-      accountStatus: "Active",
-      overdraftProtection: "Enabled",
-      monthlyFee: 0,
-      interestRate: "0.15%",
-      minimumBalance: 1000,
-    };
+  async () => {
+    const cardsHtmlPath = join(__dirname, "public", "cards.html");
+    let cardsHtml = "";
 
-    let summaryText = `🏦 **Banking Information Summary**\n\n`;
-    summaryText += `**Bank Details:**\n`;
-    summaryText += `- Bank Name: ${accountInfo.bankName}\n`;
-    summaryText += `- Routing Number: **${accountInfo.routingNumber}**\n`;
-    summaryText += `- Account Number: **${accountInfo.accountNumber}**\n`;
-    summaryText += `- SWIFT Code: ${accountInfo.swiftCode}\n\n`;
-
-    summaryText += `**Account Information:**\n`;
-    summaryText += `- Account Type: ${accountInfo.accountType}\n`;
-    summaryText += `- Account Holder: ${accountInfo.accountHolderName}\n`;
-    summaryText += `- Status: ${accountInfo.accountStatus}\n`;
-    summaryText += `- Overdraft Protection: ${accountInfo.overdraftProtection}\n\n`;
-
-    summaryText += `**Account Features:**\n`;
-    summaryText += `- Monthly Fee: ${accountInfo.monthlyFee === 0 ? "Free" : `$${accountInfo.monthlyFee}`}\n`;
-    summaryText += `- Interest Rate: ${accountInfo.interestRate}\n`;
-    summaryText += `- Minimum Balance: $${accountInfo.minimumBalance.toFixed(2)}\n`;
-
-    if (params.includeTransactions) {
-      summaryText += `\n**Recent Transactions:**\n`;
-      summaryText += `Last 5 transactions available. Use 'get_credit_card_transactions' for full history.\n`;
+    try {
+      cardsHtml = fs.readFileSync(cardsHtmlPath, "utf-8");
+    } catch (error) {
+      console.error("Failed to read cards HTML:", error);
+      cardsHtml = "<h1>Error loading credit cards</h1>";
     }
 
-    return { content: [{ type: "text", text: summaryText }] };
+    return {
+      content: [
+        {
+          type: "text",
+          text: "Here are the available cashback credit cards:\n\n1. **Active Cash® Card** - Earn unlimited 2% cash rewards on purchases\n2. **Reflect® Card** - Low intro APR for 21 months from account opening\n3. **Autograph® Card** - Earn 3X points for many ways to keep life in motion",
+        },
+      ],
+    };
+  }
+);
+
+server.registerResource(
+  "cashback-cards-ui",
+  "ui://widget/cashback-cards.html",
+  {
+    title: "Cashback Credit Cards",
+    description: "Interactive widget showing available cashback credit cards with details and application options.",
+    mimeType: "text/html+skybridge",
+  },
+  async (uri) => {
+    const cardsHtmlPath = join(__dirname, "public", "cards.html");
+    let cardsHtml = "";
+
+    try {
+      cardsHtml = fs.readFileSync(cardsHtmlPath, "utf-8");
+    } catch (error) {
+      console.error("Failed to read cards HTML:", error);
+      cardsHtml = "<h1>Error loading credit cards</h1>";
+    }
+
+    return {
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: "text/html+skybridge",
+          text: cardsHtml,
+        },
+      ],
+    };
+  }
+);
+
+
+// NEW PATTERN: Step 1 - Prepare/confirm the send money (store draft server-side)
+server.registerTool(
+  "prepare_send_money",
+  {
+    title: "Prepare Send Money",
+    description:
+      "Prepare a send money request with amount and recipient. Returns a draftId to use with open_send_money_form.",
+    inputSchema: z.object({
+      amount: z.string().min(1).regex(/^\d+(\.\d{1,2})?$/).describe("Dollar amount to send (e.g., '10.50')"),
+      recipient: z.string().min(1).describe("Recipient name (required)"),
+    }),
+  },
+  async ({ amount, recipient }) => {
+    console.log('\n========== PREPARE_SEND_MONEY TOOL CALLED ==========');
+    console.log('💰 Amount:', amount);
+    console.log('👤 Recipient:', recipient);
+    
+    if (!amount || !recipient) {
+      console.log('❌ Missing required fields');
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Error: both amount and recipient are required. Please provide both before proceeding.",
+          },
+        ],
+      };
+    }
+    
+    const { draftId, requestId } = createSendMoneyDraft(amount, recipient);
+    
+    console.log('✅ Draft prepared:', draftId);
+    console.log('========== END PREPARE_SEND_MONEY ==========\n');
+    
+    return {
+      structuredContent: {
+        draftId,
+        requestId,
+        amount,
+        recipient,
+      },
+      content: [
+        {
+          type: "text",
+          text: `Prepared send money request: $${amount} to ${recipient}. Draft ID: ${draftId}`,
+        },
+      ],
+    };
+  }
+);
+
+// NEW PATTERN: Step 2 - Open the send money form (fetch draft and prefill)
+server.registerTool(
+  "open_send_money_form",
+  {
+    title: "Open Send Money Form",
+    description:
+      "Open the Zelle® money transfer form for a previously prepared send money request.",
+    inputSchema: z.object({
+      draftId: z.string().min(1).describe("The draft ID returned from prepare_send_money"),
+    }),
+    _meta: {
+      // CRITICAL: Use STATIC template WITHOUT template variables
+      // ChatGPT's connector does NOT support {variable} substitution
+      "openai/outputTemplate": "ui://widget/sendmoney.html",
+    },
+  },
+  async ({ draftId }) => {
+    console.log('\n========== OPEN_SEND_MONEY_FORM TOOL CALLED ==========');
+    console.log('📋 draftId:', draftId);
+    
+    const draft = getSendMoneyDraft(draftId);
+    if (!draft) {
+      console.log('❌ Draft not found or expired');
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Error: draft not found or expired. Please prepare the send money request again.",
+          },
+        ],
+      };
+    }
+    
+    // CRITICAL: Also store as "latest" so resource handler can find it
+    sendMoneyLatestDraft.draftId = draftId;
+    sendMoneyLatestDraft.amount = draft.amount;
+    sendMoneyLatestDraft.recipient = draft.recipient;
+    sendMoneyLatestDraft.timestamp = draft.createdAt;
+    console.log('💾 Stored draft as "latest":', { amount: draft.amount, recipient: draft.recipient });
+    
+    console.log('✅ Opening form with draft data');
+    console.log('========== END OPEN_SEND_MONEY_FORM ==========\n');
+    
+    return {
+      structuredContent: {
+        draftId,
+        amount: draft.amount,
+        recipient: draft.recipient,
+      },
+      content: [
+        {
+          type: "text",
+          text: `Opening money transfer form for $${draft.amount} to ${draft.recipient}...`,
+        },
+      ],
+    };
+  }
+);
+
+// LEGACY: Keep old send_money tool for backward compat but point to new pattern
+// Uses STATIC outputTemplate - NO template variables
+// draftId is stored server-side as "latest" for resource handler to fetch
+server.registerTool(
+  "send_money",
+  {
+    title: "Send Money with Zelle®",
+    description:
+      "Send money directly to a recipient using Zelle®. Specify the amount and recipient name.",
+    inputSchema: z.object({
+      amount: z.string().min(1).regex(/^\d+(\.\d{1,2})?$/).describe("Dollar amount to send (e.g., '50.00')"),
+      recipient: z.string().min(1).describe("Recipient name (required, e.g., 'David' or 'Sarah Chen')"),
+    }),
+    _meta: {
+      // CRITICAL: Use STATIC template WITHOUT template variables
+      // ChatGPT's connector does NOT support {variable} substitution in outputTemplate
+      // The resource handler will use the "latest" draft stored server-side
+      "openai/outputTemplate": "ui://widget/sendmoney.html",
+    },
+  },
+  async ({ amount, recipient }) => {
+    console.log('\n========== SEND_MONEY TOOL CALLED ==========');
+    console.log('💰 Amount:', amount);
+    console.log('👤 Recipient:', recipient);
+    
+    if (!amount || !recipient) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Error: both amount and recipient are required.",
+          },
+        ],
+      };
+    }
+    
+    const { draftId, requestId } = createSendMoneyDraft(amount, recipient);
+    
+    console.log('✅ Created draft:', draftId);
+    console.log('✅ RequestId:', requestId);
+    console.log('✅ Returning structured data for ChatGPT to inject via window.openai.payload');
+    console.log('========== END SEND_MONEY ==========\n');
+    
+    // Return structured data - ChatGPT will inject this via window.openai.payload
+    return {
+      structuredContent: {
+        draftId,
+        requestId,
+        amount,
+        recipient,
+      },
+      content: [
+        {
+          type: "text",
+          text: `Sending $${amount} to ${recipient}...`,
+        },
+      ],
+    };
+  }
+);
+
+server.registerResource(
+  "sendmoney-ui",
+  "ui://widget/sendmoney.html",
+  {
+    title: "Send Money with Zelle®",
+    description: "Interactive money transfer interface using Zelle®.",
+    mimeType: "text/html+skybridge",
+  },
+  async (uri, resourceRequest) => {
+    console.log('\n========== SENDMONEY RESOURCE HANDLER CALLED ==========');
+    console.log('⏰ Resource timestamp:', new Date().toISOString());
+    console.log('📍 Full URI:', uri.href);
+    
+    const sendmoneyHtmlPath = join(__dirname, "public", "sendmoney.html");
+    let sendmoneyHtml = "";
+
+    try {
+      sendmoneyHtml = fs.readFileSync(sendmoneyHtmlPath, "utf-8");
+      
+      // FALLBACK: Since window.openai.toolOutput isn't being populated by Skybridge,
+      // we inject the latest draft data as a fallback
+      const latestDraft = getLatestSendMoneyDraft();
+      const amount = latestDraft?.amount || '';
+      const recipient = latestDraft?.recipient || '';
+      
+      console.log('📊 Fetched latest draft for fallback:', { amount, recipient });
+      
+      // Inject into window.openai.toolOutput as fallback if it's empty
+      const injectScript = `<script>
+        // Fallback: If Skybridge didn't populate toolOutput, use the draft data
+        if (!window.openai?.toolOutput || Object.keys(window.openai.toolOutput || {}).length === 0) {
+          if (!window.openai) window.openai = {};
+          window.openai.toolOutput = {
+            amount: '${amount.replace(/'/g, "\\'")}',
+            recipient: '${recipient.replace(/'/g, "\\'")}'
+          };
+          console.log('✅ Fallback: Injected toolOutput from server-side draft:', window.openai.toolOutput);
+        } else {
+          console.log('✅ Skybridge populated toolOutput, using that:', window.openai.toolOutput);
+        }
+      </script>`;
+      
+      // Insert the script right after <body> but before the React root
+      sendmoneyHtml = sendmoneyHtml.replace('<body>', `<body>${injectScript}`);
+      
+      console.log('✅ HTML loaded with fallback injection');
+      console.log('========== END RESOURCE HANDLER ==========\n');
+    } catch (error) {
+      console.error("❌ Failed to read sendmoney HTML:", error);
+      sendmoneyHtml = "<h1>Error loading money transfer interface</h1>";
+      console.log('========== END RESOURCE HANDLER (ERROR) ==========\n');
+    }
+
+    return {
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: "text/html+skybridge",
+          text: sendmoneyHtml,
+        },
+      ],
+    };
   }
 );
 
@@ -429,6 +769,32 @@ app.use((req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-XSS-Protection", "1; mode=block");
   next();
+});
+
+// DEBUG: Health check endpoint to verify tools are registered
+app.get("/api/mcp-status", (req, res) => {
+  res.json({
+    status: "online",
+    mcp_server: "form-demo-mcp",
+    timestamp: new Date().toISOString(),
+    note: "Tools registered at startup and re-advertised on each MCP connection"
+  });
+});
+
+// DEBUG: List registered tools (for diagnostics only)
+app.get("/api/mcp-tools", (req, res) => {
+  // MCP SDK doesn't expose registered tools directly, so this is informational
+  res.json({
+    info: "Tools registered via McpServer.registerTool()",
+    tools: [
+      "send_money",
+      "open_send_money_form", 
+      "prepare_send_money",
+      "open_application_form",
+      "upload_image"
+    ],
+    note: "For full details, query via /mcp with tools/list method"
+  });
 });
 
 // -----------------------------
@@ -582,8 +948,24 @@ app.get("/api/debug-sessions", (req, res) => {
   });
 });
 
+// NEW: Get latest send-money parameters (for client-side polling as fallback)
+app.get("/api/sendmoney-latest", (req, res) => {
+  const latest = getLatestSendMoneyDraft();
+  res.json({
+    amount: latest?.amount || '',
+    recipient: latest?.recipient || '',
+    timestamp: latest?.timestamp || null,
+    hasData: !!(latest?.amount || latest?.recipient),
+  });
+});
+
 // Static files + health
 app.use(express.static(join(__dirname, "public")));
+
+// Route for sendmoney page (single build serves both)
+app.get("/sendmoney.html", (req, res) => {
+  res.sendFile(join(__dirname, "public", "sendmoney.html"));
+});
 
 app.get("/health", (req, res) => {
   res.json({
@@ -596,6 +978,8 @@ app.get("/health", (req, res) => {
       imageApi: "/api/chat-gpt-image",
       downloads: "/api/chat-gpt-image/downloads",
       debugSessions: "/api/debug-sessions",
+      cards: "/cards.html",
+      sendMoney: "/sendmoney.html"
     },
     downloadsDir,
     publicUrlGuess: cachedNgrokUrl,
