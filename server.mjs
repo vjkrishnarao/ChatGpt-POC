@@ -592,7 +592,7 @@ server.registerTool(
   {
     title: "Open Send Money Form",
     description:
-      "Open the Zelle® money transfer form for a previously prepared send money request.",
+      "Open the money transfer form for a previously prepared send money request.",
     inputSchema: z.object({
       draftId: z.string().min(1).describe("The draft ID returned from prepare_send_money"),
     }),
@@ -652,9 +652,9 @@ server.registerTool(
 server.registerTool(
   "send_money",
   {
-    title: "Send Money with Zelle®",
+    title: "Send Money",
     description:
-      "Send money to a recipient using Zelle®. Can specify amount, recipient, or both. Opens form with smart prefill and screen selection.",
+      "Send money to a recipient. Can specify amount, recipient, or both. Opens form with smart prefill and screen selection.",
     inputSchema: z.object({
       amount: z.string().regex(/^\d+(\.\d{1,2})?$/, "Dollar amount format (e.g., '50.00')").optional().describe("Dollar amount to send (e.g., '50.00', '10.50') - optional"),
       recipient: z.string().optional().describe("Recipient name (e.g., 'David' or 'Sarah Chen') - optional"),
@@ -733,7 +733,7 @@ server.registerTool(
   {
     title: "Open Send Money Form",
     description:
-      "Open the Zelle® money transfer form with blank fields. User enters amount and recipient manually.",
+      "Open the money transfer form with blank fields. User enters amount and recipient manually.",
     inputSchema: z.object({}), // No required inputs
     _meta: {
       "openai/outputTemplate": "ui://widget/sendmoney.html",
@@ -764,8 +764,8 @@ server.registerResource(
   "sendmoney-ui",
   "ui://widget/sendmoney.html",
   {
-    title: "Send Money with Zelle®",
-    description: "Interactive money transfer interface using Zelle®.",
+    title: "Send Money",
+    description: "Interactive money transfer interface.",
     mimeType: "text/html+skybridge",
   },
   async (uri, resourceRequest) => {

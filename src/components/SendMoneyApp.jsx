@@ -29,12 +29,14 @@ const SendMoneyApp = ({ initialAmount = '', initialRecipient = '', startScreen =
   const [screen, setScreen] = useState(startScreen);
   const [recipient, setRecipient] = useState(finalRecipient);
   const [amount, setAmount] = useState(initialAmount);
-  const [recipientPhone, setRecipientPhone] = useState(finalPhone);
-  const [recipientName, setRecipientName] = useState(finalRecipient);
+  const [recipientPhone, setRecipientPhone] = useState('');
+  const [recipientName, setRecipientName] = useState('');
   const [memo, setMemo] = useState('');
   const [confirmationCode, setConfirmationCode] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [isAccountDropdownOpen, setIsAccountDropdownOpen] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [enteredCode, setEnteredCode] = useState('');
   
   // Account options
   const accounts = [
@@ -46,6 +48,18 @@ const SendMoneyApp = ({ initialAmount = '', initialRecipient = '', startScreen =
   
   // Get selected account details
   const selectedAccount = accounts.find(acc => acc.id === selectedAccountId);
+
+  // Format phone number for display
+  const formatPhoneForDisplay = (phone) => {
+    if (!phone) return '';
+    // Remove all non-digits
+    const digits = phone.replace(/\D/g, '');
+    // Mask first 6 digits with asterisks, show last 4 digits
+    if (digits.length >= 10) {
+      return `(***) ***-${digits.slice(-4)}`;
+    }
+    return phone;
+  };
 
   // Currency input handler - shifts digits left, always shows 0.00 format
   const handleCurrencyInput = (e) => {
@@ -128,11 +142,19 @@ const SendMoneyApp = ({ initialAmount = '', initialRecipient = '', startScreen =
 
   const handleReview = () => {
     setScreen('confirm');
-    setConfirmationCode(`WFCT0ZPT${Math.floor(Math.random() * 10000)}`);
   };
 
   const handleSend = () => {
-    setScreen('success');
+    setVerificationCode('123456');
+    setEnteredCode('');
+    setScreen('verify');
+  };
+
+  const handleVerifyCode = () => {
+    if (enteredCode === verificationCode) {
+      setConfirmationCode(`WFCT0ZPT${Math.floor(Math.random() * 10000)}`);
+      setScreen('success');
+    }
   };
 
   // Select Recipient Screen
@@ -189,7 +211,6 @@ const SendMoneyApp = ({ initialAmount = '', initialRecipient = '', startScreen =
               <div key={idx} className="recipient-item" onClick={() => handleSelectRecipient(rec)}>
                 <div className="recipient-avatar" style={{ backgroundColor: '#5B2C9F' }}>
                   {rec.initial}
-                  <span className="zelle-badge">Z</span>
                 </div>
                 <div className="recipient-info">
                   <div className="recipient-name">{rec.name}</div>
@@ -229,7 +250,7 @@ const SendMoneyApp = ({ initialAmount = '', initialRecipient = '', startScreen =
 
         <div className="warning-box">
           <span className="warning-icon">⚠</span>
-          <p>Only use Zelle® to pay people and businesses you know and trust.</p>
+          <p>Only use this service to pay people and businesses you know and trust.</p>
         </div>
 
         <div className="form-group">
@@ -255,7 +276,7 @@ const SendMoneyApp = ({ initialAmount = '', initialRecipient = '', startScreen =
             </label>
             <label className="radio-item">
               <input type="radio" name="addMethod" />
-              <span>Zelle® tag for business</span>
+              <span>Business tag</span>
             </label>
           </div>
         </div>
@@ -274,14 +295,14 @@ const SendMoneyApp = ({ initialAmount = '', initialRecipient = '', startScreen =
           <div className="info-box">
             <span className="info-icon">ⓘ</span>
             <p>
-              <strong>{recipientName}</strong> must be enrolled with Zelle® using{' '}
+              <strong>{recipientName}</strong> must be enrolled with this service using{' '}
               <strong>{recipientPhone}</strong> to receive money.
             </p>
           </div>
         )}
 
         <p className="terms-text">
-          By adding this recipient, you agree to receive text messages about your Zelle® activity. 
+          By adding this recipient, you agree to receive text messages about your transaction activity. 
           Message and data rates may apply.
         </p>
 
@@ -309,10 +330,9 @@ const SendMoneyApp = ({ initialAmount = '', initialRecipient = '', startScreen =
           <div className="recipient-card">
             <div className="recipient-avatar-large" style={{ backgroundColor: '#5B2C9F' }}>
               {recipient.charAt(0).toUpperCase()}
-              <span className="zelle-badge-large">Z</span>
             </div>
             <h2>Send to {recipient}</h2>
-            <p className="enrolled-text">Enrolled as {recipient.toUpperCase()}</p>
+            <p className="enrolled-text">Added as {recipient.toUpperCase()}</p>
           </div>
 
           <div className="amount-input-section">
@@ -381,7 +401,7 @@ const SendMoneyApp = ({ initialAmount = '', initialRecipient = '', startScreen =
         </div>
 
         <div className="button-row">
-          <button className="action-btn-secondary" onClick={() => setScreen(initialRecipient ? 'select' : 'add')}>
+          <button className="action-btn-secondary" onClick={() => setScreen('select')}>
             Cancel
           </button>
           <button className="action-btn-primary" onClick={handleReview} disabled={!amount}>
@@ -403,10 +423,9 @@ const SendMoneyApp = ({ initialAmount = '', initialRecipient = '', startScreen =
         <div className="confirmation-card">
           <div className="recipient-avatar-large" style={{ backgroundColor: '#5B2C9F' }}>
             {recipient.charAt(0).toUpperCase()}
-            <span className="zelle-badge-large">Z</span>
           </div>
           <h2>Send to {recipient}</h2>
-          <p className="enrolled-text">Enrolled as {recipient.toUpperCase()}</p>
+          <p className="enrolled-text">Added as {recipient.toUpperCase()}</p>
           
           <div className="amount-display">${amount}</div>
 
@@ -457,7 +476,7 @@ const SendMoneyApp = ({ initialAmount = '', initialRecipient = '', startScreen =
 
         <h1>All set!</h1>
         <h2>Money sent to {recipient}</h2>
-        <p className="enrolled-text">Enrolled as {recipient.toUpperCase()}</p>
+        <p className="enrolled-text">Added as {recipient.toUpperCase()}</p>
 
         <div className="amount-display-large">${amount}</div>
 
@@ -485,6 +504,61 @@ const SendMoneyApp = ({ initialAmount = '', initialRecipient = '', startScreen =
         }} style={{ width: '300px' }}>
           Done
         </button>
+      </div>
+    );
+  }
+
+  // Verification Code Screen
+  if (screen === 'verify') {
+    return (
+      <div className="send-money-container">
+        <div className="verify-header">
+          <button
+            className="close-btn"
+            onClick={() => setScreen('amount')}
+            aria-label="Close"
+          >
+            ✕
+          </button>
+          <h1>Enter code</h1>
+        </div>
+
+        <div className="verification-content">
+          <p className="verify-description">
+            A code is sent to {formatPhoneForDisplay(recipientPhone)} by text message.
+          </p>
+          <p className="verify-subtext">
+            Please give it a few minutes to arrive.
+          </p>
+
+          <div className="form-group">
+            <input
+              type="text"
+              className="code-input"
+              value={enteredCode}
+              onChange={(e) => setEnteredCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+              placeholder="000000"
+              maxLength="6"
+              inputMode="numeric"
+            />
+          </div>
+
+          <div className="button-row">
+            <button
+              className="action-btn-primary"
+              onClick={handleVerifyCode}
+              disabled={enteredCode.length !== 6}
+            >
+              Continue
+            </button>
+            <button className="action-btn-secondary" onClick={() => {
+              setVerificationCode('123456');
+              setEnteredCode('');
+            }}>
+              Get a new code
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
