@@ -34,6 +34,7 @@ const SendMoneyApp = ({ initialAmount = '', initialRecipient = '', startScreen =
   const [memo, setMemo] = useState('');
   const [confirmationCode, setConfirmationCode] = useState('');
   const [searchInput, setSearchInput] = useState('');
+  const [isAccountDropdownOpen, setIsAccountDropdownOpen] = useState(false);
   
   // Account options
   const accounts = [
@@ -329,17 +330,45 @@ const SendMoneyApp = ({ initialAmount = '', initialRecipient = '', startScreen =
 
         <div className="form-group">
           <label>Pay from</label>
-          <select
-            className="account-select"
-            value={selectedAccountId}
-            onChange={(e) => setSelectedAccountId(e.target.value)}
-          >
-            {accounts.map((account) => (
-              <option key={account.id} value={account.id}>
-                {account.name} • Available balance {account.balance}
-              </option>
-            ))}
-          </select>
+          <div className="custom-dropdown">
+            <div
+              className="dropdown-trigger"
+              onClick={() => setIsAccountDropdownOpen(!isAccountDropdownOpen)}
+            >
+              <div className="account-display">
+                <div className="account-name">{selectedAccount?.name}</div>
+                <div className="account-balance">Available balance {selectedAccount?.balance}</div>
+              </div>
+              <svg
+                className={`dropdown-arrow ${isAccountDropdownOpen ? 'open' : ''}`}
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </div>
+            {isAccountDropdownOpen && (
+              <div className="dropdown-menu">
+                {accounts.map((account) => (
+                  <div
+                    key={account.id}
+                    className={`dropdown-item ${selectedAccountId === account.id ? 'selected' : ''}`}
+                    onClick={() => {
+                      setSelectedAccountId(account.id);
+                      setIsAccountDropdownOpen(false);
+                    }}
+                  >
+                    <div className="account-name">{account.name}</div>
+                    <div className="account-balance">Available balance {account.balance}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="form-group">
@@ -368,7 +397,7 @@ const SendMoneyApp = ({ initialAmount = '', initialRecipient = '', startScreen =
     return (
       <div className="send-money-container">
         <div className="send-money-header">
-          <h1>Confirm payment</h1>
+          <h1>Review & send</h1>
         </div>
 
         <div className="confirmation-card">
@@ -448,12 +477,12 @@ const SendMoneyApp = ({ initialAmount = '', initialRecipient = '', startScreen =
           </p>
         </div>
 
-        <button className="action-btn-primary-full" onClick={() => {
+        <button className="action-btn-secondary" onClick={() => {
           setScreen('select');
           setAmount('');
           setRecipient('');
           setMemo('');
-        }}>
+        }} style={{ width: '300px' }}>
           Done
         </button>
       </div>
