@@ -31,6 +31,15 @@ app.use(
   })
 );
 
+// CRITICAL: Disable all caching for development
+app.use((req, res, next) => {
+  res.set("Cache-Control", "no-cache, no-store, must-revalidate, public, max-age=0");
+  res.set("Pragma", "no-cache");
+  res.set("Expires", "0");
+  res.set("ETag", false);
+  next();
+});
+
 // Downloads folder
 const downloadsDir = join(__dirname, "downloads");
 fs.mkdirSync(downloadsDir, { recursive: true });

@@ -31,9 +31,55 @@ const SendMoneyApp = ({ initialAmount = '', initialRecipient = '', startScreen =
   const [amount, setAmount] = useState(initialAmount);
   const [recipientPhone, setRecipientPhone] = useState(finalPhone);
   const [recipientName, setRecipientName] = useState(finalRecipient);
-  const [fromAccount, setFromAccount] = useState('EVERYDAY CHECKING ...7663');
   const [memo, setMemo] = useState('');
   const [confirmationCode, setConfirmationCode] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  
+  // Account options
+  const accounts = [
+    { id: 'checking', name: 'EVERYDAY CHECKING ...7663', balance: '$1,284.94' },
+    { id: 'savings', name: 'SAVINGS ...7664', balance: '$5,000.00' }
+  ];
+  
+  const [selectedAccountId, setSelectedAccountId] = useState('checking');
+  
+  // Get selected account details
+  const selectedAccount = accounts.find(acc => acc.id === selectedAccountId);
+
+  // Currency input handler - shifts digits left, always shows 0.00 format
+  const handleCurrencyInput = (e) => {
+    const inputValue = e.currentTarget.value;
+    
+    // Extract only numeric digits from input
+    const digits = inputValue.replace(/[^0-9]/g, '');
+    
+    // If empty, show 0.00
+    if (!digits) {
+      setAmount('0.00');
+      return;
+    }
+    
+    // We need at least 3 characters to split into int.decimal
+    // For amounts like: 1 -> 0.01, 12 -> 0.12, 123 -> 1.23, 1234 -> 12.34
+    
+    let displayDigits = digits;
+    
+    // Ensure we have at least 3 digits by padding left with zeros only if needed
+    if (displayDigits.length < 3) {
+      displayDigits = displayDigits.padStart(3, '0');
+    }
+    
+    // Split: last 2 digits are decimals, rest are integer
+    let integerPart = displayDigits.slice(0, -2) || '0';
+    const decimalPart = displayDigits.slice(-2);
+    
+    // Remove leading zeros from integer part
+    integerPart = integerPart.replace(/^0+/, '') || '0';
+    
+    const formatted = `${integerPart}.${decimalPart}`;
+    
+    setAmount(formatted);
+  };
 
   // Debug log
   React.useEffect(() => {
@@ -52,15 +98,32 @@ const SendMoneyApp = ({ initialAmount = '', initialRecipient = '', startScreen =
   const handleSelectRecipient = (rec) => {
     setRecipient(rec.name);
     setRecipientPhone(rec.phone || rec.email || '');
+    setSearchInput('');
     setScreen('amount');
   };
 
   const handleAddRecipient = () => {
     if (recipientName && recipientPhone) {
       setRecipient(recipientName);
+      setSearchInput('');
       setScreen('amount');
     }
   };
+
+  // Filter recipients based on search input
+  const getFilteredRecipients = () => {
+    if (!searchInput.trim()) return recentRecipients;
+    
+    const searchTerm = searchInput.toLowerCase().trim();
+    return recentRecipients.filter(rec =>
+      rec.name.toLowerCase().includes(searchTerm) ||
+      rec.phone?.includes(searchTerm) ||
+      rec.email?.includes(searchTerm)
+    );
+  };
+
+  const filteredRecipients = getFilteredRecipients();
+  const hasMatchingRecipient = filteredRecipients.length > 0;
 
   const handleReview = () => {
     setScreen('confirm');
@@ -94,7 +157,12 @@ const SendMoneyApp = ({ initialAmount = '', initialRecipient = '', startScreen =
               <path d="M11 19C15.4183 19 19 15.4183 19 11C19 6.58172 15.4183 3 11 3C6.58172 3 3 6.58172 3 11C3 15.4183 6.58172 19 11 19Z" stroke="#666" strokeWidth="2"/>
               <path d="M21 21L16.65 16.65" stroke="#666" strokeWidth="2" strokeLinecap="round"/>
             </svg>
-            <input type="text" placeholder="Add / Search" />
+            <input 
+              type="text" 
+              placeholder="Add / Search"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+            />
             <button className="info-btn">ⓘ</button>
           </div>
           <button className="scan-btn">
@@ -109,24 +177,43 @@ const SendMoneyApp = ({ initialAmount = '', initialRecipient = '', startScreen =
         </div>
 
         <div className="recent-section">
-          <h3>Recent</h3>
-          {recentRecipients.map((rec, idx) => (
-            <div key={idx} className="recipient-item" onClick={() => handleSelectRecipient(rec)}>
-              <div className="recipient-avatar" style={{ backgroundColor: '#5B2C9F' }}>
-                {rec.initial}
-                <span className="zelle-badge">Z</span>
+          {searchInput.trim() && (
+            <h3>Results for "{searchInput}"</h3>
+          )}
+          {!searchInput.trim() && (
+            <h3>Recent</h3>
+          )}
+          {hasMatchingRecipient ? (
+            filteredRecipients.map((rec, idx) => (
+              <div key={idx} className="recipient-item" onClick={() => handleSelectRecipient(rec)}>
+                <div className="recipient-avatar" style={{ backgroundColor: '#5B2C9F' }}>
+                  {rec.initial}
+                  <span className="zelle-badge">Z</span>
+                </div>
+                <div className="recipient-info">
+                  <div className="recipient-name">{rec.name}</div>
+                  <div className="recipient-contact">{rec.phone || rec.email}</div>
+                </div>
               </div>
-              <div className="recipient-info">
-                <div className="recipient-name">{rec.name}</div>
-                <div className="recipient-contact">{rec.phone || rec.email}</div>
-              </div>
+            ))
+          ) : (
+            <div style={{ padding: '16px', textAlign: 'center', color: '#999' }}>
+              No matching recipients found
             </div>
-          ))}
+          )}
         </div>
 
-        <button className="action-btn-secondary" onClick={() => setScreen('add')}>
-          Add New Recipient
-        </button>
+        {searchInput.trim() && !hasMatchingRecipient && (
+          <button className="action-btn-secondary" onClick={() => setScreen('add')}>
+            Add New Recipient
+          </button>
+        )}
+        
+        {!searchInput.trim() && (
+          <button className="action-btn-secondary" onClick={() => setScreen('add')}>
+            Add New Recipient
+          </button>
+        )}
       </div>
     );
   }
@@ -217,46 +304,50 @@ const SendMoneyApp = ({ initialAmount = '', initialRecipient = '', startScreen =
           <h1>Enter amount</h1>
         </div>
 
-        <div className="recipient-card">
-          <div className="recipient-avatar-large" style={{ backgroundColor: '#5B2C9F' }}>
-            {recipient.charAt(0).toUpperCase()}
-            <span className="zelle-badge-large">Z</span>
+        <div className="recipient-card-container">
+          <div className="recipient-card">
+            <div className="recipient-avatar-large" style={{ backgroundColor: '#5B2C9F' }}>
+              {recipient.charAt(0).toUpperCase()}
+              <span className="zelle-badge-large">Z</span>
+            </div>
+            <h2>Send to {recipient}</h2>
+            <p className="enrolled-text">Enrolled as {recipient.toUpperCase()}</p>
           </div>
-          <h2>Send to {recipient}</h2>
-          <p className="enrolled-text">Enrolled as {recipient.toUpperCase()}</p>
-        </div>
 
-        <div className="amount-input-section">
-          <input
-            type="text"
-            className="amount-input"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
-            placeholder="$0.00"
-          />
-          <p className="limits-text">Limits: $3,500.00/day; $18,674.00/30 days <span className="info-icon">ⓘ</span></p>
+          <div className="amount-input-section">
+            <input
+              type="text"
+              className="amount-input"
+              value={amount}
+              onChange={handleCurrencyInput}
+              placeholder="$0.00"
+              inputMode="numeric"
+            />
+            <p className="limits-text">Limits: $3,500.00/day; $18,674.00/30 days <span className="info-icon">ⓘ</span></p>
+          </div>
         </div>
 
         <div className="form-group">
           <label>Pay from</label>
-          <div className="account-selector">
-            <div>
-              <div className="account-name">{fromAccount}</div>
-              <div className="account-balance">Available balance $1,284.94</div>
-            </div>
-          </div>
+          <select
+            className="account-select"
+            value={selectedAccountId}
+            onChange={(e) => setSelectedAccountId(e.target.value)}
+          >
+            {accounts.map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.name} • Available balance {account.balance}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="form-group">
-          <label>
-            Memo <span className="optional">(optional)</span>
-            <span className="info-icon">ⓘ</span>
-          </label>
           <input
             type="text"
             value={memo}
             onChange={(e) => setMemo(e.target.value)}
-            placeholder="Add a note"
+            placeholder="Memo (optional)"
           />
         </div>
 
@@ -292,7 +383,7 @@ const SendMoneyApp = ({ initialAmount = '', initialRecipient = '', startScreen =
 
           <div className="detail-row">
             <span>From</span>
-            <span>{fromAccount}</span>
+            <span>{selectedAccount?.name}</span>
           </div>
           
           {memo && (
@@ -344,7 +435,7 @@ const SendMoneyApp = ({ initialAmount = '', initialRecipient = '', startScreen =
         <div className="detail-section">
           <div className="detail-row">
             <span>From</span>
-            <span>{fromAccount}</span>
+            <span>{selectedAccount?.name}</span>
           </div>
           
           <div className="detail-row">
