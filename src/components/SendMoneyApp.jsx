@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 
 const SendMoneyApp = ({ initialAmount = '', initialRecipient = '', startScreen = 'select' }) => {
   const recentRecipients = [
+    { name: 'Michelle Moore', phone: '(123) 456-7890', initial: 'MM' },
     { name: 'Sarah Mitchell', phone: '(415) 234-5678', initial: 'SM' },
     { name: 'David Chen', phone: '(650) 789-4321', initial: 'DC' },
     { name: 'Emily Rodriguez', email: 'emily.rodriguez@email.com', initial: 'ER' },
@@ -165,6 +166,8 @@ const SendMoneyApp = ({ initialAmount = '', initialRecipient = '', startScreen =
           <h1>Select recipient</h1>
         </div>
         {!hasInitialData && (
+          <>
+          {/* 
           <div className="info-box" style={{ marginTop: 8 }}>
             <span className="info-icon">ⓘ</span>
             <p>
@@ -172,6 +175,8 @@ const SendMoneyApp = ({ initialAmount = '', initialRecipient = '', startScreen =
               Please choose who to pay and enter the details manually.
             </p>
           </div>
+          */}
+          </>
         )}
         
         <div className="search-section">
