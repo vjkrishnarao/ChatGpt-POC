@@ -3,7 +3,7 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 const HtmlInlineScriptPlugin = require('html-inline-script-webpack-plugin');
 
 module.exports = {
-  mode: 'development',
+  mode: 'production',
   entry: {
     cards: './src/cards-entry.jsx',
     sendmoney: './src/sendmoney-entry.jsx'
@@ -46,6 +46,9 @@ module.exports = {
       inject: 'body',
       inlineSource: '.(js|css)$'
     }),
+    new HtmlInlineScriptPlugin({
+      htmlMatchPattern: [/cards\.html$/]
+    }),
     new HtmlWebpackPlugin({
       template: './src/index.html',
       filename: '../sendmoney.html',
@@ -53,7 +56,9 @@ module.exports = {
       inject: 'body',
       inlineSource: '.(js|css)$'
     }),
-    new HtmlInlineScriptPlugin()
+    new HtmlInlineScriptPlugin({
+      htmlMatchPattern: [/sendmoney\.html$/]
+    })
   ],
   devServer: {
     static: {

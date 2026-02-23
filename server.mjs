@@ -517,6 +517,7 @@ server.registerResource(
 
     try {
       cardsHtml = fs.readFileSync(cardsHtmlPath, "utf-8");
+      console.log('✅ Serving cards.html with inlined CSS/JS');
     } catch (error) {
       console.error("Failed to read cards HTML:", error);
       cardsHtml = "<h1>Error loading credit cards</h1>";
@@ -760,6 +761,70 @@ server.registerTool(
   }
 );
 
+// Example.com loader tool - loads example.com in an embedded iframe
+server.registerTool(
+  "load_example",
+  {
+    title: "Load Example.com",
+    description: "Loads example.com in an embedded iframe.",
+    inputSchema: z.object({}),
+    _meta: {
+      "openai/outputTemplate": "ui://widget/external-page.html",
+      "openai/toolInvocation/invoking": "Loading example.com...",
+      "openai/toolInvocation/invoked": "Example.com loaded successfully.",
+    },
+  },
+  async () => {
+    console.log("🌐 Loading example.com in iframe");
+    
+    return {
+      structuredContent: {
+        url: "https://example.com",
+        title: "Example Domain",
+      },
+      content: [
+        {
+          type: "text",
+          text: "Loading example.com...",
+        },
+      ],
+    };
+  }
+);
+
+// Credit card terms viewer tool - opens terms and conditions in full screen
+server.registerTool(
+  "open_credit_card_terms",
+  {
+    title: "Open Credit Card Terms",
+    description: "Opens credit card terms and conditions in a full-screen viewer.",
+    inputSchema: z.object({
+      cardName: z.string().describe("The name of the credit card"),
+    }),
+    _meta: {
+      "openai/outputTemplate": "ui://widget/credit-terms.html",
+      "openai/toolInvocation/invoking": "Loading terms and conditions...",
+      "openai/toolInvocation/invoked": "Terms loaded successfully.",
+    },
+  },
+  async ({ cardName }) => {
+    console.log(`📄 Loading terms for ${cardName}`);
+    
+    return {
+      structuredContent: {
+        cardName,
+        termsContent: "Credit Terms go here..",
+      },
+      content: [
+        {
+          type: "text",
+          text: `Showing ${cardName} terms and conditions.`,
+        },
+      ],
+    };
+  }
+);
+
 server.registerResource(
   "sendmoney-ui",
   "ui://widget/sendmoney.html",
@@ -825,6 +890,180 @@ server.registerResource(
   }
 );
 
+server.registerResource(
+  "external-page-ui",
+  "ui://widget/external-page.html",
+  {
+    title: "External Page Viewer",
+    description: "Displays external URLs in an iframe",
+    mimeType: "text/html+skybridge",
+  },
+  async (uri) => {
+    // Generate a simple HTML page with an iframe
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>External Page</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+  </style>
+</head>
+<body>
+  <iframe id="externalFrame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+  <script>
+    // Get URL from toolOutput
+    const url = window.openai?.toolOutput?.url || 'https://example.com';
+    console.log('📍 Loading URL:', url);
+    document.getElementById('externalFrame').src = url;
+  </script>
+</body>
+</html>`;
+
+    return {
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: "text/html+skybridge",
+          text: html,
+        },
+      ],
+    };
+  }
+);
+
+server.registerResource(
+  "credit-terms-ui",
+  "ui://widget/credit-terms.html",
+  {
+    title: "Credit Card Terms",
+    description: "Displays credit card terms and conditions",
+    mimeType: "text/html+skybridge",
+  },
+  async (uri) => {
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Credit Card Terms</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      background: #f5f5f5;
+      padding: 40px 20px;
+      line-height: 1.6;
+    }
+    
+    .terms-container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      padding: 40px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    }
+    
+    h1 {
+      font-size: 32px;
+      margin-bottom: 10px;
+      color: #333;
+    }
+    
+    .subtitle {
+      font-size: 18px;
+      color: #666;
+      margin-bottom: 30px;
+    }
+    
+    .terms-content {
+      font-size: 16px;
+      color: #555;
+      padding: 20px;
+      background: #f9f9f9;
+      border-radius: 8px;
+      border-left: 4px solid #d71e28;
+    }
+    
+    .terms-content p {
+      margin-bottom: 15px;
+    }
+    
+    @media (max-width: 768px) {
+      body {
+        padding: 20px 15px;
+      }
+      
+      .terms-container {
+        padding: 25px 20px;
+      }
+      
+      h1 {
+        font-size: 24px;
+      }
+      
+      .subtitle {
+        font-size: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="terms-container">
+    <h1 id="cardName">Credit Card Terms</h1>
+    <p class="subtitle">Terms and Conditions</p>
+    <div class="terms-content" id="termsContent">
+      <p>Credit Terms go here..</p>
+    </div>
+  </div>
+  
+  <script>
+    // Get data from toolOutput
+    const cardName = window.openai?.toolOutput?.cardName || 'Credit Card';
+    const termsContent = window.openai?.toolOutput?.termsContent || 'Credit Terms go here..';
+    
+    console.log('📄 Loading terms for:', cardName);
+    
+    // Update the DOM
+    document.getElementById('cardName').textContent = cardName + ' - Terms and Conditions';
+    document.getElementById('termsContent').innerHTML = '<p>' + termsContent + '</p>';
+  </script>
+</body>
+</html>`;
+
+    return {
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: "text/html+skybridge",
+          text: html,
+        },
+      ],
+    };
+  }
+);
+
 // -----------------------------
 // Minimal security headers
 // -----------------------------
@@ -857,7 +1096,9 @@ app.get("/api/mcp-tools", (req, res) => {
       "open_application_form",
       "upload_image",
       "get_credit_card_transactions",
-      "get_cashback_cards"
+      "get_cashback_cards",
+      "load_example",
+      "open_credit_card_terms"
     ],
     note: "For full details, query via /mcp with tools/list method"
   });
