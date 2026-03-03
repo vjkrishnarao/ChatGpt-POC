@@ -1,9 +1,27 @@
-import React from 'react';
+import React, { useState } from 'react';
 import CreditCard from './CreditCard';
 
 const CardsApp = () => {
   // Set useSVG to true to use SVG graphics, false to use actual card images
   const useSVG = false;
+  const [learnMoreModal, setLearnMoreModal] = useState({ isOpen: false, cardTitle: '', content: '' });
+
+  const handleOpenLearnMore = async (title) => {
+    // Request fullscreen mode in ChatGPT
+    await window.openai?.requestDisplayMode({ mode: "fullscreen",  showHeader: false,
+  showCloseButton: false});
+    
+    setLearnMoreModal({
+      isOpen: true,
+      cardTitle: title,
+      content: 'Learn more content goes here'
+    });
+  };
+
+  const handleCloseLearnMore = async () => {
+    await window.openai?.requestDisplayMode({ mode: "inline" });
+    setLearnMoreModal({ isOpen: false, cardTitle: '', content: '' });
+  };
 
   const cardsData = [
     {
@@ -39,11 +57,24 @@ const CardsApp = () => {
   ];
 
   return (
-    <div className="cards-container">
-      {cardsData.map(card => (
-        <CreditCard key={card.id} {...card} useSVG={useSVG} />
-      ))}
-    </div>
+    <>
+      <div className="cards-container">
+        {cardsData.map(card => (
+          <CreditCard key={card.id} {...card} useSVG={useSVG} onOpenLearnMore={handleOpenLearnMore} />
+        ))}
+      </div>
+      
+      {learnMoreModal.isOpen && (
+        <div className="modal-overlay" onClick={handleCloseLearnMore}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close" onClick={handleCloseLearnMore}>×</button>
+            <div className="modal-body">
+              <p>{learnMoreModal.content}</p>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 

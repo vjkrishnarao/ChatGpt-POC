@@ -37,6 +37,17 @@ app.use((req, res, next) => {
   res.set("Pragma", "no-cache");
   res.set("Expires", "0");
   res.set("ETag", false);
+  
+  // Auto-detect Cloud Run URL from first request
+  if (process.env.K_SERVICE && cachedNgrokUrl.includes('localhost')) {
+    const protocol = req.get('x-forwarded-proto') || req.protocol;
+    const host = req.get('x-forwarded-host') || req.get('host');
+    if (host && !host.includes('localhost')) {
+      cachedNgrokUrl = `${protocol}://${host}`;
+      console.log(`📍 Detected Cloud Run URL: ${cachedNgrokUrl}`);
+    }
+  }
+  
   next();
 });
 
@@ -308,9 +319,33 @@ function toDataUrl(buffer, mimeType) {
 }
 
 // -----------------------------
-// Ngrok URL discovery (kept)
+// Public URL discovery
 // -----------------------------
-const getNgrokUrl = async () => {
+const getPublicUrl = async () => {
+  // Check for Cloud Run service URL (injected by Cloud Run)
+  if (process.env.K_SERVICE) {
+    // Cloud Run provides the full URL via request headers or metadata
+    // Best approach: return the URL from metadata service or use a known pattern
+    // For now, we'll use the service name which Cloud Run provides
+    // The actual URL format is: https://SERVICE-HASH-REGION-SHORTCODE.a.run.app
+    // We can't predict the hash, so we need to use environment variable or request header
+    
+    // If URL is provided via env (can be set during deployment)
+    if (process.env.CLOUD_RUN_SERVICE_URL) {
+      return process.env.CLOUD_RUN_SERVICE_URL;
+    }
+    
+    // Fallback: try to detect from request (will be set on first request)
+    // For now return a placeholder - will be updated on first health check
+    return "https://chatgpt-mcp-2sg4obot2q-uc.a.run.app";
+  }
+  
+  // Check for explicit PUBLIC_URL env var
+  if (process.env.PUBLIC_URL) {
+    return process.env.PUBLIC_URL;
+  }
+  
+  // Try ngrok for local development
   try {
     const response = await fetch("http://localhost:4040/api/tunnels");
     const data = await response.json();
@@ -320,13 +355,14 @@ const getNgrokUrl = async () => {
   } catch (error) {
     console.warn("⚠️  Could not fetch ngrok URL:", error.message);
   }
+  
   return "http://localhost:3000";
 };
 
 let cachedNgrokUrl = "http://localhost:3000";
 const updateNgrokUrl = async () => {
-  cachedNgrokUrl = await getNgrokUrl();
-  console.log(`📍 Using image server URL: ${cachedNgrokUrl}`);
+  cachedNgrokUrl = await getPublicUrl();
+  console.log(`📍 Using public URL: ${cachedNgrokUrl}`);
 };
 updateNgrokUrl();
 setInterval(updateNgrokUrl, 30000);
@@ -645,6 +681,44 @@ server.registerTool(
   }
 );
 
+// NEW: Open external page in iframe
+server.registerTool(
+  "open_external_page",
+  {
+    title: "Open External Page",
+    description:
+      "Opens an external webpage in an iframe. Use this to display external content like example.com or any URL.",
+    inputSchema: z.object({
+      url: z.string().url().describe("The URL to load in the iframe (e.g., 'https://example.com')"),
+      title: z.string().optional().describe("Optional title for the page"),
+    }),
+    _meta: {
+      "openai/outputTemplate": "ui://widget/external-page.html",
+      "openai/toolInvocation/invoking": "Loading external page...",
+      "openai/toolInvocation/invoked": "External page loaded successfully.",
+    },
+  },
+  async ({ url, title }) => {
+    console.log('\n========== OPEN_EXTERNAL_PAGE TOOL CALLED ==========');
+    console.log('🌐 URL:', url);
+    console.log('📝 Title:', title || '(none)');
+    console.log('========== END OPEN_EXTERNAL_PAGE ==========\n');
+    
+    return {
+      structuredContent: {
+        url,
+        title: title || url,
+      },
+      content: [
+        {
+          type: "text",
+          text: `Opening ${title || url} in iframe...`,
+        },
+      ],
+    };
+  }
+);
+
 // ENHANCED: Smart send_money tool with optional parameters
 // Handles partial input: amount-only, recipient-only, or both
 // Uses STATIC outputTemplate - NO template variables
@@ -825,6 +899,141 @@ server.registerResource(
   }
 );
 
+server.registerResource(
+  "external-page-ui",
+  "ui://widget/external-page.html",
+  {
+    title: "External Page Viewer",
+    description: "Displays external web pages in an iframe.",
+    mimeType: "text/html+skybridge",
+  },
+  async (uri, resourceRequest) => {
+    console.log('\n========== EXTERNAL-PAGE RESOURCE HANDLER CALLED ==========');
+    console.log('📍 URI:', uri.href);
+    
+    // Create inline HTML with iframe
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>External Page</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      width: 100%;
+      height: 100vh;
+      min-height: 100vh;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      display: flex;
+      flex-direction: column;
+    }
+    .header {
+      background: #f5f5f5;
+      padding: 8px 16px;
+      border-bottom: 1px solid #ddd;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    .header h1 {
+      font-size: 14px;
+      font-weight: 500;
+      color: #333;
+      margin: 0;
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .url-badge {
+      background: #e8e8e8;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      color: #666;
+      font-family: monospace;
+    }
+    iframe {
+      width: 100%;
+      flex: 1;
+      min-height: 800px;
+      height: 100%;
+      border: none;
+      display: block;
+    }
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      min-height: 800px;
+      color: #666;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1 id="page-title">Loading...</h1>
+    <span class="url-badge" id="url-display">...</span>
+  </div>
+  <div class="loading" id="loading">Loading external page...</div>
+  <iframe id="external-iframe" style="display: none;"></iframe>
+  
+  <script>
+    // Get URL from toolOutput (populated by Skybridge)
+    const toolOutput = window.openai?.toolOutput || {};
+    const url = toolOutput.url || 'https://static.wellsfargo.com/web/servicing/mytracker/#/error';
+    const title = toolOutput.title || url;
+    
+    console.log('🌐 Loading external page:', { url, title });
+    
+    // Update UI
+    document.getElementById('page-title').textContent = title;
+    document.getElementById('url-display').textContent = new URL(url).hostname;
+    
+    // Load iframe
+    const iframe = document.getElementById('external-iframe');
+    const loading = document.getElementById('loading');
+    
+    iframe.onload = () => {
+      loading.style.display = 'none';
+      iframe.style.display = 'block';
+      console.log('✅ External page loaded');
+    };
+    
+    iframe.onerror = () => {
+      loading.textContent = 'Failed to load page. The site may not allow embedding.';
+      console.error('❌ Failed to load iframe');
+    };
+    
+    iframe.src = url;
+  </script>
+</body>
+</html>`;
+    
+    console.log('✅ External page HTML generated');
+    console.log('========== END EXTERNAL-PAGE RESOURCE HANDLER ==========\n');
+    
+    return {
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: "text/html+skybridge",
+          text: html,
+        },
+      ],
+    };
+  }
+);
+
 // -----------------------------
 // Minimal security headers
 // -----------------------------
@@ -850,6 +1059,7 @@ app.get("/api/mcp-tools", (req, res) => {
   res.json({
     info: "Tools registered via McpServer.registerTool()",
     tools: [
+      "open_external_page",
       "send_money",
       "open_send_money_form",
       "open_blank_send_money_form",
