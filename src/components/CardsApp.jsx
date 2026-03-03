@@ -147,7 +147,7 @@ With our mobile app, you can easily track your spending, monitor rewards, set up
               </a>
               <br />
               <a href="#" className="modal-terms-link" onClick={(e) => { e.preventDefault(); handleOpenOpenAIModal(); }}>
-                Terms and Conditions OpenAI Native Modal
+                Terms and Conditions OpenAI Modal
               </a>
             </div>
           </div>
