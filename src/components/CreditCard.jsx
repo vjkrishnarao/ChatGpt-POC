@@ -21,10 +21,10 @@ const CreditCard = ({ label, title, description, cardType, termsLink, applyLink,
     }
   };
 
-  const handleTermsClick = (e) => {
+  const handleTermsClick = async (e) => {
     e.preventDefault();
     if (onOpenTerms) {
-      onOpenTerms(title);
+      await onOpenTerms(title);
     }
   };
   

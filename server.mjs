@@ -1035,6 +1035,130 @@ server.registerResource(
 );
 
 // -----------------------------
+// Resource: Terms Modal UI
+// -----------------------------
+server.registerResource(
+  "terms-modal-ui",
+  "ui://widget/terms-modal.html",
+  {
+    title: "Terms and Conditions Modal",
+    description: "OpenAI modal for displaying terms and conditions.",
+    mimeType: "text/html;profile=mcp-app",
+  },
+  async (uri) => {
+    const termsHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terms and Conditions</title>
+  <style>
+    * {
+      margin: 10px;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      background: white;
+      color: #141414;
+      padding: 24px;
+      line-height: 1.6;
+    }
+    h1 {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 2px solid #f5f5f5;
+    }
+    .terms-section {
+      margin-bottom: 20px;
+    }
+    .terms-section h2 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #141414;
+    }
+    .terms-section p {
+      font-size: 14px;
+      color: #333;
+      margin-bottom: 12px;
+    }
+    .close-button {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      background: #D71E28;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .close-button:hover {
+      background: #bb0826;
+    }
+  </style>
+</head>
+<body>
+  
+  <h1>Terms and Conditions</h1>
+  
+  <div class="terms-section">
+    <h2>Annual Percentage Rate (APR)</h2>
+    <p>Variable APR of 18.99% - 29.99% based on creditworthiness. Introductory APR of 0% for the first 15 months on purchases and balance transfers, then the variable APR applies. Cash advances subject to a 27.99% APR.</p>
+  </div>
+
+  <div class="terms-section">
+    <h2>Fees</h2>
+    <p>No annual fee for the first year, then $95 annually. Balance transfer fee of 3% of the amount transferred (minimum $5). Cash advance fee of 5% of the amount advanced (minimum $10). Foreign transaction fee of 3% of each transaction in U.S. dollars. Late payment fee up to $40. Returned payment fee up to $40.</p>
+  </div>
+
+  <div class="terms-section">
+    <h2>Credit Limit</h2>
+    <p>Your credit limit will be determined based on your creditworthiness and income at the time of application. Minimum credit limit of $500. Credit limit increases may be considered after 6 months of responsible account management.</p>
+  </div>
+
+  <div class="terms-section">
+    <h2>Rewards Program</h2>
+    <p>Earn rewards on eligible purchases. Rewards do not expire as long as your account remains open and in good standing. Rewards may be redeemed for statement credits, gift cards, merchandise, or travel. Maximum rewards earning is capped at $25,000 in combined purchases per calendar year.</p>
+  </div>
+
+  <div class="terms-section">
+    <h2>Payment Terms</h2>
+    <p>Minimum payment due is either $35 or 1% of your new balance plus interest charges and late fees, whichever is greater. Payment is due by 5 PM ET on the due date. Grace period of at least 21 days on purchases when you pay your balance in full each billing cycle.</p>
+  </div>
+
+  <div class="terms-section">
+    <h2>Account Changes</h2>
+    <p>We reserve the right to change your APR, credit limit, or other account terms with 45 days advance notice as permitted by law. Your account is subject to periodic review and terms may be adjusted based on your payment history and credit profile.</p>
+  </div>
+</body>
+</html>`;
+
+    return {
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: "text/html;profile=mcp-app",
+          text: termsHtml,
+          _meta: {
+            ui: {
+              prefersBorder: true
+            }
+          }
+        },
+      ],
+    };
+  }
+);
+
+// -----------------------------
 // Minimal security headers
 // -----------------------------
 app.use((req, res, next) => {
@@ -1079,7 +1203,7 @@ app.get("/api/mcp-tools", (req, res) => {
 app.post("/mcp", async (req, res) => {
   try {
     const transport = new StreamableHTTPServerTransport({
-      enableJsonResponse: true,
+      enableJsonResponse: false, // Ensure SSE streaming is enabled
     });
 
     res.on("close", () => transport.close());
@@ -1241,6 +1365,22 @@ app.use(express.static(join(__dirname, "public")));
 // Route for sendmoney page (single build serves both)
 app.get("/sendmoney.html", (req, res) => {
   res.sendFile(join(__dirname, "public", "sendmoney.html"));
+});
+
+// Root endpoint
+app.get("/", (req, res) => {
+  res.json({
+    status: "ok",
+    service: "form-demo-mcp",
+    version: "1.0.0",
+    message: "MCP Server is running. Use POST /mcp for MCP protocol requests.",
+    endpoints: {
+      mcp: "/mcp",
+      health: "/health",
+      cards: "/cards.html",
+      sendMoney: "/sendmoney.html"
+    }
+  });
 });
 
 app.get("/health", (req, res) => {
